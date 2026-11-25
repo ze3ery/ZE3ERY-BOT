@@ -62,7 +62,58 @@ class MainActivity : Activity() {
 
         setContentView(layout)
     }
+private fun sendCommand(enabled: Boolean) {
+    val token = tokenInput.text.toString().trim()
 
+    if (token.isEmpty()) {
+        status.text = "ENTER CONNECTION CODE"
+        status.setTextColor(Color.RED)
+        return
+    }
+
+    status.text = "CONNECTING..."
+    status.setTextColor(gold)
+
+    thread {
+        var connection: HttpURLConnection? = null
+
+        try {
+            connection = URL("$serverUrl/app/control")
+                .openConnection() as HttpURLConnection
+
+            connection.requestMethod = "POST"
+            connection.connectTimeout = 15000
+            connection.readTimeout = 15000
+            connection.doOutput = true
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.setRequestProperty("x-device-token", token)
+
+            connection.outputStream.use {
+                it.write("""{"enabled":$enabled}""".toByteArray())
+            }
+
+            val code = connection.responseCode
+            val response = (if (code >= 400) connection.errorStream else connection.inputStream)
+                ?.bufferedReader()?.use { it.readText() } ?: ""
+
+            runOnUiThread {
+                status.text = if (code == 200) {
+                    if (enabled) "DEMO READY" else "BOT STOPPED"
+                } else {
+                    "ERROR $code: $response"
+                }
+                status.setTextColor(if (code == 200) gold else Color.RED)
+            }
+        } catch (e: Exception) {
+            runOnUiThread {
+                status.text = "CONNECTION FAILED: ${e.message}"
+                status.setTextColor(Color.RED)
+            }
+        } finally {
+            connection?.disconnect()
+        }
+    }
+}
     private fun space(): TextView {
         return TextView(this).apply { text = "\n" }
     }
